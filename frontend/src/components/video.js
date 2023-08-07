@@ -125,7 +125,7 @@ const VideoTest = () => {
     let video = document.getElementById("video");
     if (open === false) {
       navigator.mediaDevices
-        .getUserMedia({ video: { width: 1280, height: 720 } })
+        .getUserMedia({ video: { width: 640, height: 480 } })
         .then((stream) => {
           console.log(stream);
           video.srcObject = stream;
