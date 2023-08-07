@@ -20,7 +20,6 @@ Franch: fr
 Japanese: ja
 Korean: ko
 */
-
 const Home = () => {
   const languages = [
     { language: "English", code: "en" },
