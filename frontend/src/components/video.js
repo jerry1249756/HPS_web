@@ -33,7 +33,7 @@ const VideoTest = () => {
     baseOptions: {
       modelAssetPath:
         "https://storage.googleapis.com/mediapipe-tasks/gesture_recognizer/gesture_recognizer.task",
-      delegate: "GPU",
+      delegate: "CPU",
     },
     numHands: 1,
     runningMode: "VIDEO",
