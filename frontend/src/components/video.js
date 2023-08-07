@@ -194,7 +194,7 @@ const VideoTest = () => {
         text="press me 3"
         isInside={posX > 600 && posX < 750 && posY > 300 && posY < 375}
       />
-      <video id="video" autoPlay style={{ visibility: "hidden" }} />
+      <video id="video" autoPlay />
       {/* { <video id="video" autoPlay style={{ visibility: "hidden" }} />} */}
       <canvas id="canvas" width="1080" height="720"></canvas>
     </>
