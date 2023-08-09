@@ -126,7 +126,8 @@ const VideoTest = () => {
     if (open === false) {
       navigator.mediaDevices
         .getUserMedia({
-          video: { width: 640, height: 480, frameRate: { ideal: 1, max: 3 } },
+          //   video: { width: 640, height: 480, frameRate: { ideal: 1, max: 3 } },
+          video: { width: 640, height: 480 },
         })
         .then((stream) => {
           console.log(stream);

@@ -3,14 +3,19 @@ import {
   Button,
   Container,
   FormControl,
-  InputLabel,
+  Box,
   Select,
   MenuItem,
+  Stack,
 } from "@mui/material";
 import axios from "axios";
+import "./style.css";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
+import SyncIcon from "@mui/icons-material/Sync";
+import HearingIcon from "@mui/icons-material/Hearing";
+import HearingDisabledIcon from "@mui/icons-material/HearingDisabled";
 
 /*
 language code:
@@ -32,41 +37,19 @@ const Home = () => {
   const [targetLang, setTargetLang] = useState("zh-tw");
   const [translText, setTranslText] = useState("");
   const [utterance, setUtterance] = useState(null);
-  const {
-    transcript,
-    listening,
-    resetTranscript,
-    browserSupportsSpeechRecognition,
-  } = useSpeechRecognition();
+  const [record, setRecord] = useState([]);
+  const { transcript, listening } = useSpeechRecognition();
 
   const translTask = async () => {
-    // let temp = "";
-    // var url =
-    //   "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" +
-    //   sourceLang +
-    //   "&tl=" +
-    //   targetLang +
-    //   "&dt=t&q=" +
-    //   encodeURI(transcript);
-
-    // await axios.get(url).then((res) => {
-    //   const data = res.data;
-    //   console.log(data[0][0][0]);
-    //   temp += data[0][0][0];
-    // });
-    // console.log(temp);
-
-    // setTranslText(temp);
     let splited = [];
     let temp = "";
+    let temp_record = record.slice();
     if (transcript !== undefined) {
-      console.log(transcript);
       if (sourceLang !== "zh-tw") {
         splited = transcript.split(/[.!?]/);
       } else {
         splited = transcript.split("。");
       }
-      console.log(splited);
 
       splited.forEach(async (text) => {
         if (text !== "") {
@@ -80,12 +63,16 @@ const Home = () => {
 
           await axios.get(url).then((res) => {
             const data = res.data;
-            console.log(data[0][0][0]);
             temp += data[0][0][0];
           });
-          console.log(temp);
 
           setTranslText(temp);
+
+          temp_record.push(
+            { text: transcript, language: sourceLang },
+            { text: temp, language: targetLang }
+          ); // asynchronus update
+          setRecord(temp_record);
         }
       });
     }
@@ -115,9 +102,25 @@ const Home = () => {
     };
   }, [translText, targetLang]);
 
-  const handlePlay = () => {
+  useEffect(() => {
+    if (!listening) {
+      translTask();
+    }
+  }, [listening]);
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const handlePlay = async () => {
     const synth = window.speechSynthesis;
     synth.speak(utterance);
+
+    await sleep(5000);
+
+    let temp = targetLang;
+    setTargetLang(sourceLang);
+    setSourceLang(temp);
+
+    SpeechRecognition.startListening({ language: temp });
   };
 
   const handleSource = (e) => {
@@ -128,44 +131,86 @@ const Home = () => {
     setTargetLang(languages.find(({ code }) => code === e.target.value).code);
   };
 
+  const handleSwap = () => {
+    let temp = targetLang;
+    setTargetLang(sourceLang);
+    setSourceLang(temp);
+  };
+
   return (
-    <Container>
-      <p>Set Source Language: </p>
-      <FormControl variant="standard" sx={{ minWidth: "12vw" }}>
-        <InputLabel>Source Language</InputLabel>
-        <Select value={sourceLang} onChange={handleSource} label="SourceLang">
-          <MenuItem value="">
-            <em>None</em>
-          </MenuItem>
-          {languages.map((item) => (
-            <MenuItem value={item.code} key={item.code}>
-              {item.language}
+    <Container
+      sx={{ marginLeft: "auto", marginRight: "auto", marginTop: "10vh" }}
+    >
+      <Stack direction="row">
+        <FormControl
+          variant="standard"
+          sx={{ minWidth: "12vw", marginRight: "5vw" }}
+        >
+          <Select value={sourceLang} onChange={handleSource} label="SourceLang">
+            <MenuItem value="">
+              <em>None</em>
             </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <p>Set Target Language: </p>
-      <FormControl variant="standard" sx={{ minWidth: "12vw" }}>
-        <InputLabel>Target Language</InputLabel>
-        <Select value={targetLang} onChange={handleTarget} label="TargetLang">
-          <MenuItem value="">
-            <em>None</em>
-          </MenuItem>
-          {languages.map((item) => (
-            <MenuItem value={item.code} key={item.code}>
-              {item.language}
+            {languages.map((item) => (
+              <MenuItem value={item.code} key={item.code}>
+                {item.language}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Button
+          onClick={() => {
+            handleSwap();
+          }}
+        >
+          <SyncIcon />
+        </Button>
+
+        <FormControl
+          variant="standard"
+          sx={{ minWidth: "12vw", marginLeft: "5vw" }}
+        >
+          <Select value={targetLang} onChange={handleTarget} label="TargetLang">
+            <MenuItem value="">
+              <em>None</em>
             </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <p>{translText}</p>
+            {languages.map((item) => (
+              <MenuItem value={item.code} key={item.code}>
+                {item.language}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Stack>
+      <Box sx={{ borderColor: "#2f57f7", borderWidth: "2px" }}></Box>
+
+      <div>
+        <div className="rotated">This is a inverted text.</div>
+
+        <p>Microphone: {listening ? "on" : "off"}</p>
+        <Button
+          onClick={() => {
+            if (!listening) {
+              SpeechRecognition.startListening({ language: sourceLang });
+            }
+          }}
+        >
+          {listening ? <HearingIcon /> : <HearingDisabledIcon />}
+        </Button>
+        {/* <p>{transcript}</p> */}
+      </div>
+
+      {/* <p>{translText}</p>
       <Button
         onClick={() => {
           translTask();
         }}
       >
         Press Me for translation
-      </Button>
+      </Button> */}
+      <p>
+        The microphone will be automatically turned on after the speech is
+        finished. It'll also swap the detected language.
+      </p>
       <Button
         onClick={() => {
           handlePlay();
@@ -173,29 +218,10 @@ const Home = () => {
       >
         Press for play
       </Button>
-      {!browserSupportsSpeechRecognition ? (
-        <span>Browser does not support speech recognition</span>
+      {record.length > 0 ? (
+        record.map(({ text, language }) => <p>{text}</p>)
       ) : (
-        <div>
-          <p>Microphone: {listening ? "on" : "off"}</p>
-          <Button
-            onClick={() => {
-              SpeechRecognition.startListening({ language: sourceLang });
-            }}
-          >
-            Start
-          </Button>
-          <Button
-            onClick={async () => {
-              SpeechRecognition.stopListening();
-              await translTask();
-            }}
-          >
-            Stop
-          </Button>
-          <Button onClick={resetTranscript}>Reset</Button>
-          <p>{transcript}</p>
-        </div>
+        <p>No record yet</p>
       )}
     </Container>
   );
