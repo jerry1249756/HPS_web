@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Button,
   Container,
@@ -7,15 +7,21 @@ import {
   Select,
   MenuItem,
   Stack,
+  Typography,
+  Grid,
 } from "@mui/material";
 import axios from "axios";
-import "./style.css";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
+import { useNavigate } from "react-router-dom";
+import { FilesetResolver, GestureRecognizer } from "@mediapipe/tasks-vision";
+
+import "./style.css";
 import SyncIcon from "@mui/icons-material/Sync";
 import HearingIcon from "@mui/icons-material/Hearing";
 import HearingDisabledIcon from "@mui/icons-material/HearingDisabled";
+import CampaignIcon from "@mui/icons-material/Campaign";
 
 /*
 language code:
@@ -25,20 +31,43 @@ Franch: fr
 Japanese: ja
 Korean: ko
 */
+
+let gestureRecognizer;
+let results = undefined;
+let prev_state = false;
+let lastVideoTime = -1;
+
 const Home = () => {
   const languages = [
     { language: "English", code: "en" },
     { language: "German", code: "de" },
     { language: "Franch", code: "fr" },
     { language: "Chinese (Traditional)", code: "zh-tw" },
+    { language: "Japanese", code: "ja" },
+    { language: "Korean", code: "ko" },
   ];
 
-  const [sourceLang, setSourceLang] = useState("");
+  // language state
+  const [sourceLang, setSourceLang] = useState("en");
   const [targetLang, setTargetLang] = useState("zh-tw");
   const [translText, setTranslText] = useState("");
   const [utterance, setUtterance] = useState(null);
   const [record, setRecord] = useState([]);
-  const { transcript, listening } = useSpeechRecognition();
+
+  // finger recoginition state
+  const [posX, setPosX] = useState(0);
+  const [posY, setPosY] = useState(0);
+
+  // video element open state
+  const [open, setOpen] = useState(false);
+
+  const { transcript, listening, browserSupportsSpeechRecognition } =
+    useSpeechRecognition();
+  const navigate = useNavigate();
+
+  // reference for video element
+  const videoEl = useRef(null);
+  const canvasEl = useRef(null);
 
   const translTask = async () => {
     let splited = [];
@@ -72,6 +101,9 @@ const Home = () => {
             { text: transcript, language: sourceLang },
             { text: temp, language: targetLang }
           ); // asynchronus update
+          if (temp_record.length > 10) {
+            temp_record = temp_record.slice(-10);
+          }
           setRecord(temp_record);
         }
       });
@@ -91,36 +123,60 @@ const Home = () => {
     // );
   };
 
-  useEffect(() => {
-    const synth = window.speechSynthesis;
-    const u = new SpeechSynthesisUtterance(translText);
-    u.lang = targetLang;
-    setUtterance(u);
+  const options = {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-tasks/gesture_recognizer/gesture_recognizer.task",
+      delegate: "GPU",
+    },
+    numHands: 1,
+    runningMode: "IMAGE",
+  };
 
-    return () => {
-      synth.cancel();
-    };
-  }, [translText, targetLang]);
+  const setUp = async () => {
+    // fetching the model from mediapipe
 
-  useEffect(() => {
-    if (!listening) {
-      translTask();
+    // path/to/wasm/root
+    const filesetResolver = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+    );
+    gestureRecognizer = await GestureRecognizer.createFromOptions(
+      filesetResolver,
+      options
+    );
+  };
+
+  const getVideo = () => {
+    if (open === false) {
+      navigator.mediaDevices
+        .getUserMedia({
+          //   video: { width: 640, height: 480, frameRate: { ideal: 1, max: 3 } },
+          video: { width: 1080, height: 720 },
+        })
+        .then((stream) => {
+          console.log(stream);
+          let video = videoEl.current;
+          video.srcObject = stream;
+          // video.addEventListener("loadeddata", predict);
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+      setOpen(true);
     }
-  }, [listening]);
+  };
 
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  const handlePlay = async () => {
+  const handlePlay = (text) => {
     const synth = window.speechSynthesis;
-    synth.speak(utterance);
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = targetLang;
+    synth.speak(u);
 
-    await sleep(5000);
+    handleSwap();
 
-    let temp = targetLang;
-    setTargetLang(sourceLang);
-    setSourceLang(temp);
-
-    SpeechRecognition.startListening({ language: temp });
+    setTimeout(() => {
+      SpeechRecognition.startListening({ language: targetLang });
+    }, 4000);
   };
 
   const handleSource = (e) => {
@@ -137,69 +193,196 @@ const Home = () => {
     setSourceLang(temp);
   };
 
-  return (
-    <Container
-      sx={{ marginLeft: "auto", marginRight: "auto", marginTop: "10vh" }}
-    >
-      <Stack direction="row">
-        <FormControl
-          variant="standard"
-          sx={{ minWidth: "12vw", marginRight: "5vw" }}
-        >
-          <Select value={sourceLang} onChange={handleSource} label="SourceLang">
-            <MenuItem value="">
-              <em>None</em>
-            </MenuItem>
-            {languages.map((item) => (
-              <MenuItem value={item.code} key={item.code}>
-                {item.language}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Button
-          onClick={() => {
+  const getPictureAndPredict = () => {
+    let canvas = canvasEl.current;
+    let ctx = canvas.getContext("2d");
+    let video = videoEl.current;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const results = gestureRecognizer.recognize(canvas);
+
+    let state = false;
+
+    if (results.landmarks) {
+      for (const landmarks of results.landmarks) {
+        const tempX = (1 - landmarks[8].x) * 1920;
+        const tempY = landmarks[8].y * 1080;
+
+        setPosX(tempX);
+        setPosY(tempY);
+
+        if (
+          Math.pow(landmarks[4].x - landmarks[8].x, 2) +
+            Math.pow(landmarks[4].y - landmarks[8].y, 2) <
+          0.002
+        ) {
+          state = true;
+        }
+
+        // click by squeezing
+        if (prev_state === false && state === true) {
+          // console.log("squeeze");
+          const hearingButtonRect = document
+            .getElementById("hearing-button")
+            .getBoundingClientRect();
+          const playingButtonRect = document
+            .getElementById("play-button")
+            .getBoundingClientRect();
+          const swappingButtonRect = document
+            .getElementById("swap-button")
+            .getBoundingClientRect();
+
+          if (
+            tempX > hearingButtonRect.left &&
+            tempX < hearingButtonRect.right &&
+            tempY > hearingButtonRect.top &&
+            tempY < hearingButtonRect.bottom
+          ) {
+            SpeechRecognition.startListening({ language: sourceLang });
+          } else if (
+            tempX > playingButtonRect.left &&
+            tempX < playingButtonRect.right &&
+            tempY > playingButtonRect.top &&
+            tempY < playingButtonRect.bottom
+          ) {
+            handlePlay(translText);
+          } else if (
+            tempX > swappingButtonRect.left &&
+            tempX < swappingButtonRect.right &&
+            tempY > swappingButtonRect.top &&
+            tempY < swappingButtonRect.bottom
+          ) {
             handleSwap();
+          }
+        }
+
+        prev_state = state;
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!listening) {
+      translTask();
+    }
+  }, [listening]);
+
+  useEffect(() => {
+    // called when component is mount
+    setUp();
+    getVideo();
+  }, []);
+
+  useEffect(() => {
+    const task = setInterval(() => {
+      if (gestureRecognizer) {
+        getPictureAndPredict();
+      }
+    }, 10);
+    return () => {
+      clearInterval(task);
+    };
+  });
+
+  return (
+    <>
+      <Container
+        sx={{
+          paddingLeft: "0px",
+          paddingRight: "0px",
+          marginLeft: "0px",
+          marginRight: "0px",
+        }}
+        disableGutters
+        maxWidth={false}
+      >
+        <Box
+          sx={{
+            backgroundColor: "#4285f4",
+            paddingTop: "3vh",
+            paddingBottom: "3vh",
+            borderRadius: "20px",
           }}
         >
-          <SyncIcon />
-        </Button>
+          <Stack
+            direction="row"
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "white",
+              borderRadius: "20px",
+              marginLeft: "10vw",
+              marginRight: "10vw",
+              paddingBottom: "3vh",
+              paddingTop: "3vh",
+            }}
+          >
+            <FormControl
+              variant="standard"
+              sx={{
+                minWidth: "12vw",
+                marginRight: "5vw",
+              }}
+            >
+              <Select
+                value={sourceLang}
+                onChange={handleSource}
+                label="SourceLang"
+                sx={{
+                  fontSize: "xx-large",
+                  width: "20vw",
+                  color: "#cdcfd1",
+                }}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {languages.map((item) => (
+                  <MenuItem value={item.code} key={item.code}>
+                    {item.language}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              onClick={() => {
+                handleSwap();
+              }}
+              id="swap-button"
+            >
+              <SyncIcon sx={{ fontSize: "50px" }} />
+            </Button>
 
-        <FormControl
-          variant="standard"
-          sx={{ minWidth: "12vw", marginLeft: "5vw" }}
-        >
-          <Select value={targetLang} onChange={handleTarget} label="TargetLang">
-            <MenuItem value="">
-              <em>None</em>
-            </MenuItem>
-            {languages.map((item) => (
-              <MenuItem value={item.code} key={item.code}>
-                {item.language}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Stack>
-      <Box sx={{ borderColor: "#2f57f7", borderWidth: "2px" }}></Box>
+            <FormControl
+              variant="standard"
+              sx={{ minWidth: "12vw", marginLeft: "5vw" }}
+            >
+              <Select
+                value={targetLang}
+                onChange={handleTarget}
+                label="TargetLang"
+                sx={{ fontSize: "xx-large", width: "20vw", color: "#cdcfd1" }}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {languages.map((item) => (
+                  <MenuItem value={item.code} key={item.code}>
+                    {item.language}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        </Box>
 
-      <div>
-        <div className="rotated">This is a inverted text.</div>
+        {!browserSupportsSpeechRecognition ? (
+          <span>Browser does not support speech recognition</span>
+        ) : (
+          <div>{/* <p>{transcript}</p> */}</div>
+        )}
 
-        <p>Microphone: {listening ? "on" : "off"}</p>
-        <Button
-          onClick={() => {
-            if (!listening) {
-              SpeechRecognition.startListening({ language: sourceLang });
-            }
-          }}
-        >
-          {listening ? <HearingIcon /> : <HearingDisabledIcon />}
-        </Button>
-        {/* <p>{transcript}</p> */}
-      </div>
-
-      {/* <p>{translText}</p>
+        {/* <p>{translText}</p>
       <Button
         onClick={() => {
           translTask();
@@ -207,23 +390,159 @@ const Home = () => {
       >
         Press Me for translation
       </Button> */}
-      <p>
-        The microphone will be automatically turned on after the speech is
-        finished. It'll also swap the detected language.
-      </p>
-      <Button
-        onClick={() => {
-          handlePlay();
+        {/* <div style={{ paddingLeft: "5vw", paddingRight: "5vw" }}>
+        <p>
+          The microphone will be automatically turned on after the speech is
+          finished. It'll also swap the detected language.
+        </p>
+        <Button
+          variant="contained"
+          onClick={() => {
+            handlePlay();
+          }}
+          sx={{ marginBottom: "5vh", fontSize: "xx-large" }}
+        >
+          Press for play
+        </Button>
+      </div> */}
+        <div
+          style={{
+            marginTop: "3vh",
+            borderRadius: "20px",
+            border: "4px solid #cdcfd1",
+            borderWidth: "8px",
+            paddingLeft: "5vw",
+            paddingRight: " 5vw",
+            height: "60vh",
+          }}
+        >
+          <Stack direction="column">
+            {record.length > 0 ? (
+              record.map(({ text, language }) => (
+                <div
+                  style={{
+                    fontSize: "xx-large",
+                    paddingTop: "1vh",
+                    color: language === sourceLang ? "#18b835" : "#000000",
+                    textAlign: language === sourceLang ? "left" : "right",
+                  }}
+                >
+                  {text}
+                </div>
+              ))
+            ) : (
+              <p>No record yet</p>
+            )}
+          </Stack>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            marginTop: "1vh",
+          }}
+        >
+          <Grid container>
+            <Grid
+              item
+              xs={6}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <Button
+                onClick={() => {
+                  if (!listening) {
+                    SpeechRecognition.startListening({ language: sourceLang });
+                  }
+                }}
+                sx={{
+                  border: listening ? "5px solid #0f9d58" : "",
+                  borderRadius: "20px",
+                }}
+                id="hearing-button"
+              >
+                {listening ? (
+                  <HearingIcon sx={{ fontSize: "50px" }} />
+                ) : (
+                  <HearingDisabledIcon sx={{ fontSize: "50px" }} />
+                )}
+              </Button>
+            </Grid>
+            <Grid
+              item
+              xs={6}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <Button
+                onClick={() => {
+                  handlePlay(translText);
+                }}
+                id="play-button"
+              >
+                <CampaignIcon sx={{ fontSize: "50px" }} />
+              </Button>
+            </Grid>
+            <Grid
+              item
+              xs={6}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <Typography
+                sx={{ fontSize: "20px", color: "#cdcfd1", marginTop: "1px" }}
+              >
+                Squeeze your finger to translate
+              </Typography>
+            </Grid>
+            <Grid
+              item
+              xs={6}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <Typography
+                sx={{ fontSize: "20px", color: "#cdcfd1", marginTop: "1px" }}
+              >
+                Squeeze your finger to play
+              </Typography>
+            </Grid>
+          </Grid>
+        </div>
+      </Container>
+      <div
+        style={{
+          position: "absolute",
+          left: posX,
+          top: posY,
+          backgroundColor: "#fc2c03",
+          width: "16px",
+          height: "16px",
+          borderRadius: "50%",
+          zIndex: 1,
         }}
-      >
-        Press for play
-      </Button>
-      {record.length > 0 ? (
-        record.map(({ text, language }) => <p>{text}</p>)
-      ) : (
-        <p>No record yet</p>
-      )}
-    </Container>
+      />
+      <video
+        id="video"
+        autoPlay
+        ref={videoEl}
+        style={{ zIndex: 1, display: "none" }}
+      />
+      <canvas
+        id="canvas"
+        ref={canvasEl}
+        style={{ width: 1080, height: 720, display: "none" }}
+      />
+    </>
   );
 };
 
