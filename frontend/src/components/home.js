@@ -9,11 +9,13 @@ import {
   Stack,
   Typography,
   Grid,
+  Modal,
 } from "@mui/material";
 import axios from "axios";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
+import instruction from "./../introduction.gif";
 import { useNavigate } from "react-router-dom";
 import { FilesetResolver, GestureRecognizer } from "@mediapipe/tasks-vision";
 
@@ -33,9 +35,8 @@ Korean: ko
 */
 
 let gestureRecognizer;
-let results = undefined;
 let prev_state = false;
-let lastVideoTime = -1;
+let lastFingerY = 0.5;
 
 const Home = () => {
   const languages = [
@@ -51,8 +52,8 @@ const Home = () => {
   const [sourceLang, setSourceLang] = useState("en");
   const [targetLang, setTargetLang] = useState("zh-tw");
   const [translText, setTranslText] = useState("");
-  const [utterance, setUtterance] = useState(null);
   const [record, setRecord] = useState([]);
+  const [stage, setStage] = useState(0);
 
   // finger recoginition state
   const [posX, setPosX] = useState(0);
@@ -197,6 +198,7 @@ const Home = () => {
     let canvas = canvasEl.current;
     let ctx = canvas.getContext("2d");
     let video = videoEl.current;
+
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const results = gestureRecognizer.recognize(canvas);
 
@@ -209,6 +211,10 @@ const Home = () => {
 
         setPosX(tempX);
         setPosY(tempY);
+        if (stage === 0 && lastFingerY - landmarks[8].y > 0.2) {
+          console.log("swipe up!", landmarks[8].y, lastFingerY);
+          setStage(stage + 1);
+        }
 
         if (
           Math.pow(landmarks[4].x - landmarks[8].x, 2) +
@@ -216,6 +222,9 @@ const Home = () => {
           0.002
         ) {
           state = true;
+          if (stage === 1) {
+            setStage(stage + 1);
+          }
         }
 
         // click by squeezing
@@ -256,6 +265,7 @@ const Home = () => {
         }
 
         prev_state = state;
+        lastFingerY = landmarks[8].y;
       }
     }
   };
@@ -268,6 +278,7 @@ const Home = () => {
 
   useEffect(() => {
     // called when component is mount
+
     setUp();
     getVideo();
   }, []);
@@ -331,7 +342,6 @@ const Home = () => {
                 sx={{
                   fontSize: "xx-large",
                   width: "20vw",
-                  color: "#cdcfd1",
                 }}
               >
                 <MenuItem value="">
@@ -361,7 +371,7 @@ const Home = () => {
                 value={targetLang}
                 onChange={handleTarget}
                 label="TargetLang"
-                sx={{ fontSize: "xx-large", width: "20vw", color: "#cdcfd1" }}
+                sx={{ fontSize: "xx-large", width: "20vw" }}
               >
                 <MenuItem value="">
                   <em>None</em>
@@ -382,34 +392,11 @@ const Home = () => {
           <div>{/* <p>{transcript}</p> */}</div>
         )}
 
-        {/* <p>{translText}</p>
-      <Button
-        onClick={() => {
-          translTask();
-        }}
-      >
-        Press Me for translation
-      </Button> */}
-        {/* <div style={{ paddingLeft: "5vw", paddingRight: "5vw" }}>
-        <p>
-          The microphone will be automatically turned on after the speech is
-          finished. It'll also swap the detected language.
-        </p>
-        <Button
-          variant="contained"
-          onClick={() => {
-            handlePlay();
-          }}
-          sx={{ marginBottom: "5vh", fontSize: "xx-large" }}
-        >
-          Press for play
-        </Button>
-      </div> */}
         <div
           style={{
             marginTop: "3vh",
             borderRadius: "20px",
-            border: "4px solid #cdcfd1",
+            border: "4px solid black",
             borderWidth: "8px",
             paddingLeft: "5vw",
             paddingRight: " 5vw",
@@ -419,16 +406,16 @@ const Home = () => {
           <Stack direction="column">
             {record.length > 0 ? (
               record.map(({ text, language }) => (
-                <div
+                <Typography
                   style={{
-                    fontSize: "xx-large",
                     paddingTop: "1vh",
-                    color: language === sourceLang ? "#18b835" : "#000000",
+                    color: language === sourceLang ? "#DB4437" : "#000000",
                     textAlign: language === sourceLang ? "left" : "right",
                   }}
+                  variant="h4"
                 >
                   {text}
-                </div>
+                </Typography>
               ))
             ) : (
               <p>No record yet</p>
@@ -496,9 +483,7 @@ const Home = () => {
                 justifyContent: "center",
               }}
             >
-              <Typography
-                sx={{ fontSize: "20px", color: "#cdcfd1", marginTop: "1px" }}
-              >
+              <Typography sx={{ fontSize: "20px", marginTop: "1px" }}>
                 Squeeze your finger to translate
               </Typography>
             </Grid>
@@ -510,9 +495,7 @@ const Home = () => {
                 justifyContent: "center",
               }}
             >
-              <Typography
-                sx={{ fontSize: "20px", color: "#cdcfd1", marginTop: "1px" }}
-              >
+              <Typography sx={{ fontSize: "20px", marginTop: "1px" }}>
                 Squeeze your finger to play
               </Typography>
             </Grid>
@@ -528,7 +511,7 @@ const Home = () => {
           width: "16px",
           height: "16px",
           borderRadius: "50%",
-          zIndex: 1,
+          zIndex: 10,
         }}
       />
       <video
@@ -537,6 +520,26 @@ const Home = () => {
         ref={videoEl}
         style={{ zIndex: 1, display: "none" }}
       />
+      <Modal
+        open={stage === 1 || stage === 0}
+        sx={{ backdropFilter: "blur(5px)", zIndex: 1 }}
+      >
+        <Box
+          sx={{
+            border: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {stage === 0 ? (
+            <img src={instruction} alt="instruction" />
+          ) : (
+            <div>Hello</div>
+          )}
+        </Box>
+      </Modal>
+
       <canvas
         id="canvas"
         ref={canvasEl}
