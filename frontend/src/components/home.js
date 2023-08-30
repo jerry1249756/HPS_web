@@ -102,8 +102,8 @@ const Home = () => {
             { text: transcript, language: sourceLang },
             { text: temp, language: targetLang }
           ); // asynchronus update
-          if (temp_record.length > 10) {
-            temp_record = temp_record.slice(-10);
+          if (temp_record.length > 5) {
+            temp_record = temp_record.slice(-5);
           }
           setRecord(temp_record);
         }
@@ -411,6 +411,8 @@ const Home = () => {
                     paddingTop: "1vh",
                     color: language === sourceLang ? "#DB4437" : "#000000",
                     textAlign: language === sourceLang ? "left" : "right",
+                    fontFamily: "Noto Sans TC",
+                    fontSize: 75,
                   }}
                   variant="h4"
                 >
