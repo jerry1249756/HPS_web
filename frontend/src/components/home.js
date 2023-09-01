@@ -233,10 +233,10 @@ const Home = () => {
             setStage(stage + 1);
           } else {
             const hearingButtonRect = document
-              .getElementById("hearing-button")
+              .getElementById("hearing-button-1")
               .getBoundingClientRect();
             const playingButtonRect = document
-              .getElementById("play-button")
+              .getElementById("play-button-1")
               .getBoundingClientRect();
             const swappingButtonRect = document
               .getElementById("swap-button")
@@ -443,6 +443,7 @@ const Home = () => {
                 display: "flex",
                 justifyContent: "center",
               }}
+              id="hearing-button-1"
             >
               <Button
                 onClick={() => {
@@ -470,6 +471,7 @@ const Home = () => {
                 display: "flex",
                 justifyContent: "center",
               }}
+              id="play-button-1"
             >
               <Button
                 onClick={() => {
