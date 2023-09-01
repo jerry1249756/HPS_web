@@ -15,7 +15,8 @@ import axios from "axios";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
-import instruction from "./../introduction.gif";
+import instruction1 from "./../swipe_lock_final.gif";
+import instruction2 from "./../click_final.gif";
 import { useNavigate } from "react-router-dom";
 import { FilesetResolver, GestureRecognizer } from "@mediapipe/tasks-vision";
 
@@ -222,45 +223,47 @@ const Home = () => {
           0.002
         ) {
           state = true;
-          if (stage === 1) {
-            setStage(stage + 1);
-          }
         }
 
         // click by squeezing
         if (prev_state === false && state === true) {
           // console.log("squeeze");
-          const hearingButtonRect = document
-            .getElementById("hearing-button")
-            .getBoundingClientRect();
-          const playingButtonRect = document
-            .getElementById("play-button")
-            .getBoundingClientRect();
-          const swappingButtonRect = document
-            .getElementById("swap-button")
-            .getBoundingClientRect();
+          if (stage === 1) {
+            // make an element and setstage if its clicking inside.
+            setStage(stage + 1);
+          } else {
+            const hearingButtonRect = document
+              .getElementById("hearing-button")
+              .getBoundingClientRect();
+            const playingButtonRect = document
+              .getElementById("play-button")
+              .getBoundingClientRect();
+            const swappingButtonRect = document
+              .getElementById("swap-button")
+              .getBoundingClientRect();
 
-          if (
-            tempX > hearingButtonRect.left &&
-            tempX < hearingButtonRect.right &&
-            tempY > hearingButtonRect.top &&
-            tempY < hearingButtonRect.bottom
-          ) {
-            SpeechRecognition.startListening({ language: sourceLang });
-          } else if (
-            tempX > playingButtonRect.left &&
-            tempX < playingButtonRect.right &&
-            tempY > playingButtonRect.top &&
-            tempY < playingButtonRect.bottom
-          ) {
-            handlePlay(translText);
-          } else if (
-            tempX > swappingButtonRect.left &&
-            tempX < swappingButtonRect.right &&
-            tempY > swappingButtonRect.top &&
-            tempY < swappingButtonRect.bottom
-          ) {
-            handleSwap();
+            if (
+              tempX > hearingButtonRect.left &&
+              tempX < hearingButtonRect.right &&
+              tempY > hearingButtonRect.top &&
+              tempY < hearingButtonRect.bottom
+            ) {
+              SpeechRecognition.startListening({ language: sourceLang });
+            } else if (
+              tempX > playingButtonRect.left &&
+              tempX < playingButtonRect.right &&
+              tempY > playingButtonRect.top &&
+              tempY < playingButtonRect.bottom
+            ) {
+              handlePlay(translText);
+            } else if (
+              tempX > swappingButtonRect.left &&
+              tempX < swappingButtonRect.right &&
+              tempY > swappingButtonRect.top &&
+              tempY < swappingButtonRect.bottom
+            ) {
+              handleSwap();
+            }
           }
         }
 
@@ -535,9 +538,9 @@ const Home = () => {
           }}
         >
           {stage === 0 ? (
-            <img src={instruction} alt="instruction" />
+            <img src={instruction1} alt="instruction1" />
           ) : (
-            <div>Hello</div>
+            <img src={instruction2} alt="instruction2" />
           )}
         </Box>
       </Modal>
